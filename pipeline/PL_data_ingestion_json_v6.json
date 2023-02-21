@@ -5,7 +5,14 @@
 			{
 				"name": "Copy web store online sales data",
 				"type": "Copy",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "Get SrcToTgt details",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "0.00:10:00",
 					"retry": 0,
@@ -39,7 +46,7 @@
 				},
 				"inputs": [
 					{
-						"referenceName": "DS_online_files_json",
+						"referenceName": "DS_online_sales_json",
 						"type": "DatasetReference"
 					}
 				],
@@ -205,6 +212,48 @@
 						}
 					}
 				}
+			},
+			{
+				"name": "Get SrcToTgt details",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[dbo].[GetSourceToTargetInfo]",
+						"storedProcedureParameters": {
+							"SourceSystemCode": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().parameters.sysCode",
+									"type": "Expression"
+								}
+							},
+							"Stage": {
+								"type": "String",
+								"value": {
+									"value": "@variables('v_pl_stage')",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzSQL_SourceToTargetDetails",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
 			}
 		],
 		"parameters": {
@@ -229,6 +278,10 @@
 			"v_pl_Status": {
 				"type": "String",
 				"defaultValue": "SUCCESS"
+			},
+			"v_pl_stage": {
+				"type": "String",
+				"defaultValue": "SOURCE_TO_RAW"
 			}
 		},
 		"annotations": [],
