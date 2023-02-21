@@ -1,5 +1,5 @@
 {
-	"name": "DS_AzSQL_SourceToTargetDetails",
+	"name": "DS_AzSQL_Batch_details",
 	"properties": {
 		"linkedServiceName": {
 			"referenceName": "LS_AzSQL_data_Engg_metadata",
@@ -83,7 +83,7 @@
 		],
 		"typeProperties": {
 			"schema": "dbo",
-			"table": "SourceToTargetView"
+			"table": "BatchRun"
 		}
 	}
 }
