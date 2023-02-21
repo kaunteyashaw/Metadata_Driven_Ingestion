@@ -1,0 +1,41 @@
+{
+	"name": "DS_DLake_Online_folders_json",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_adls_data_engg_datalake",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"param_ds_dl_container": {
+				"type": "string"
+			},
+			"param_ds_dl_filename": {
+				"type": "string"
+			},
+			"param_ds_dl_directory": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@dataset().param_ds_dl_filename",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().param_ds_dl_directory",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().param_ds_dl_container",
+					"type": "Expression"
+				}
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

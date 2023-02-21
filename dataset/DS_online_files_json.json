@@ -1,0 +1,48 @@
+{
+	"name": "DS_online_files_json",
+	"properties": {
+		"description": "JSON Source datasets",
+		"linkedServiceName": {
+			"referenceName": "LS_ablob_webstore",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"ds_param_container": {
+				"type": "string",
+				"defaultValue": "sales"
+			},
+			"ds_param_directory": {
+				"type": "string",
+				"defaultValue": "."
+			},
+			"ds_param_fileName": {
+				"type": "string",
+				"defaultValue": "onlinesales.json"
+			}
+		},
+		"folder": {
+			"name": "webstore"
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().ds_param_fileName",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().ds_param_directory",
+					"type": "Expression"
+				},
+				"container": {
+					"value": "@dataset().ds_param_container",
+					"type": "Expression"
+				}
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
