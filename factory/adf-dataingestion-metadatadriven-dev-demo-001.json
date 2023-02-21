@@ -1,0 +1,9 @@
+{
+	"name": "adf-dataingestion-metadatadriven-dev-demo-001",
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "be4d6e16-0c8a-4a38-95b4-f6dd61fd5808",
+		"tenantId": "ff501040-ab1c-4680-a880-074f6b3a7b97"
+	}
+}

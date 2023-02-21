@@ -1,0 +1,271 @@
+{
+	"name": "pl_util_log_pipeline_metadata",
+	"properties": {
+		"description": "Log pipeline run information(Metadata)",
+		"activities": [
+			{
+				"name": "IF CONDITION to set and send email",
+				"description": "Saves log & Sends mail when fail else save logs only.",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.status, 'SUCCESS')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Log pipelinerun information meatdata",
+							"description": "for FALSE",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.10:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[InsertPipelineLog]",
+								"storedProcedureParameters": {
+									"EndTime": {
+										"value": {
+											"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"PipelineID": {
+										"value": {
+											"value": "@pipeline().parameters.pipelineID",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PipelineName": {
+										"value": {
+											"value": "@pipeline().parameters.pipelineName",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"RunID": {
+										"value": {
+											"value": "@pipeline().parameters.runID",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"SnapshotDate": {
+										"value": {
+											"value": "@pipeline().parameters.snapshotDate",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"SourceToTargetID": {
+										"value": {
+											"value": "@pipeline().parameters.sourceToTargetID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"StartTime": {
+										"value": {
+											"value": "@pipeline().parameters.pipelineTriggerTime",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"Status": {
+										"value": {
+											"value": "@pipeline().parameters.status",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"UpdateAt": {
+										"value": {
+											"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "LS_AzSQL_data_Engg_metadata",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Set status and send email fro FALSE_FAIL",
+							"description": "calls 'pl_util_set_status_msg'",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Log pipelinerun information meatdata",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_util_set_status_msg",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"status": {
+										"value": "@pipeline().parameters.status",
+										"type": "Expression"
+									},
+									"triggered_PL": {
+										"value": "@pipeline().parameters.pipelineName",
+										"type": "Expression"
+									},
+									"systemcode": {
+										"value": "@pipeline().parameters.systemCode",
+										"type": "Expression"
+									},
+									"datasetname": {
+										"value": "@pipeline().parameters.dtastNm",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Log pipelinerun information meatdata_SUCCESS",
+							"description": "for SUCCESS",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.10:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[InsertPipelineLog]",
+								"storedProcedureParameters": {
+									"EndTime": {
+										"value": {
+											"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"PipelineID": {
+										"value": {
+											"value": "@pipeline().parameters.pipelineID",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PipelineName": {
+										"value": {
+											"value": "@pipeline().parameters.pipelineName",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"RunID": {
+										"value": {
+											"value": "@pipeline().parameters.runID",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"SnapshotDate": {
+										"value": {
+											"value": "@pipeline().parameters.snapshotDate",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"SourceToTargetID": {
+										"value": {
+											"value": "@pipeline().parameters.sourceToTargetID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"StartTime": {
+										"value": {
+											"value": "@pipeline().parameters.pipelineTriggerTime",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"Status": {
+										"value": {
+											"value": "@pipeline().parameters.status",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"UpdateAt": {
+										"value": {
+											"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "LS_AzSQL_data_Engg_metadata",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"snapshotDate": {
+				"type": "string"
+			},
+			"status": {
+				"type": "string"
+			},
+			"runID": {
+				"type": "string"
+			},
+			"sourceToTargetID": {
+				"type": "string"
+			},
+			"pipelineTriggerTime": {
+				"type": "string"
+			},
+			"pipelineID": {
+				"type": "string"
+			},
+			"pipelineName": {
+				"type": "string"
+			},
+			"systemCode": {
+				"type": "string"
+			},
+			"dtastNm": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "utilities"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-02-20T15:23:53Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
