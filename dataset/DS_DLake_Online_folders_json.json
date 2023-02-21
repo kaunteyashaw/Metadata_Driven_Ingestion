@@ -21,8 +21,18 @@
 		"typeProperties": {
 			"location": {
 				"type": "AzureBlobFSLocation",
-				"folderPath": "webstore/raw/onlinesales",
-				"fileSystem": "webdevelopment"
+				"fileName": {
+					"value": "@dataset().param_ds_dl_filename",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().param_ds_dl_directory",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().param_ds_dl_container",
+					"type": "Expression"
+				}
 			}
 		},
 		"schema": {}
