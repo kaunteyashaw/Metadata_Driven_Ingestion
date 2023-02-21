@@ -1,5 +1,5 @@
 {
-	"name": "DS_online_sales_json",
+	"name": "DS_online_files_json",
 	"properties": {
 		"description": "JSON Source datasets",
 		"linkedServiceName": {
