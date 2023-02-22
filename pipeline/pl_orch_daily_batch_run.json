@@ -1,0 +1,64 @@
+{
+	"name": "pl_orch_daily_batch_run",
+	"properties": {
+		"description": "Daily batch run orchestration of ingestion pipeline",
+		"activities": [
+			{
+				"name": "get BatchRun details",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[dbo].[GetBatch]",
+						"storedProcedureParameters": {
+							"PFrequency": {
+								"type": "String",
+								"value": {
+									"value": "@variables('v_freq_')",
+									"type": "Expression"
+								}
+							},
+							"PSystemCode": {
+								"type": "String",
+								"value": {
+									"value": "@variables('v_sysCode')",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzSQL_Batch_details",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"variables": {
+			"v_freq_": {
+				"type": "String",
+				"defaultValue": "DAILY"
+			},
+			"v_sysCode": {
+				"type": "String",
+				"defaultValue": "OWS"
+			}
+		},
+		"folder": {
+			"name": "orchestration"
+		},
+		"annotations": []
+	}
+}
