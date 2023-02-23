@@ -44,6 +44,59 @@
 					},
 					"firstRowOnly": false
 				}
+			},
+			{
+				"name": "For each batch run information",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "get BatchRun details",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('get BatchRun details').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Run ingestion",
+							"description": "PL_data_ingestion_json_v6",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_data_ingestion_json_v6",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"sysCode": {
+										"value": "@variables('v_sysCode')",
+										"type": "Expression"
+									},
+									"dsName": {
+										"value": "@item().DatasetName",
+										"type": "Expression"
+									},
+									"runID": {
+										"value": "@item().runID",
+										"type": "Expression"
+									},
+									"snapDate": {
+										"value": "@item().SnapShotDate",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
 			}
 		],
 		"variables": {
