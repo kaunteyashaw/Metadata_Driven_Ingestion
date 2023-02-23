@@ -1,0 +1,341 @@
+{
+	"name": "PL_data_ingestion_json_v6",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get SrcToTgt details",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[dbo].[GetSourceToTargetInfo]",
+						"storedProcedureParameters": {
+							"Dataset": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().parameters.dsName",
+									"type": "Expression"
+								}
+							},
+							"SourceSystemCode": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().parameters.sysCode",
+									"type": "Expression"
+								}
+							},
+							"Stage": {
+								"type": "String",
+								"value": {
+									"value": "@variables('v_pl_stage')",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzSQL_SourceToTargetDetails",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "For each src to tgt",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get SrcToTgt details",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get SrcToTgt details').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Copy web store online sales data_copy1",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.00:10:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_online_files_json",
+									"type": "DatasetReference",
+									"parameters": {
+										"ds_param_container": {
+											"value": "@item().SourceContainer",
+											"type": "Expression"
+										},
+										"ds_param_directory": {
+											"value": "@item().SourceRelativePathSchema",
+											"type": "Expression"
+										},
+										"ds_param_fileName": {
+											"value": "@item().SourceTechnicalName",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_DLake_Online_folders_json",
+									"type": "DatasetReference",
+									"parameters": {
+										"param_ds_dl_container": {
+											"value": "@item().TargetContainer",
+											"type": "Expression"
+										},
+										"param_ds_dl_filename": {
+											"value": "@item().TargetTechnicalName",
+											"type": "Expression"
+										},
+										"param_ds_dl_directory": {
+											"value": "@concat(item().TargetRelativePathSchema, '/', \r\n        formatDateTime(pipeline().parameters.snapDate, 'yyyy-MM-dd'))",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "set SUCCESS status_copy1",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Copy web store online sales data_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "v_pl_Status",
+								"value": {
+									"value": "SUCCESS",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Set FAIL status_copy1",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Copy web store online sales data_copy1",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "v_pl_Status",
+								"value": {
+									"value": "FAILED",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "log pipeline metadata - SUCCESS_copy1",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "set SUCCESS status_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_util_log_pipeline_metadata",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"snapshotDate": {
+										"value": "@formatDateTime(pipeline().parameters.snapDate, 'yyyy-MM-dd')",
+										"type": "Expression"
+									},
+									"status": {
+										"value": "@variables('v_pl_Status')",
+										"type": "Expression"
+									},
+									"runID": {
+										"value": "@pipeline().parameters.runID",
+										"type": "Expression"
+									},
+									"sourceToTargetID": {
+										"value": "@item().SourceToTargetID",
+										"type": "Expression"
+									},
+									"pipelineTriggerTime": {
+										"value": "@convertFromUtc(pipeline().TriggerTime, 'India Standard Time')",
+										"type": "Expression"
+									},
+									"pipelineID": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"pipelineName": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"systemCode": {
+										"value": "@pipeline().parameters.sysCode",
+										"type": "Expression"
+									},
+									"dtastNm": {
+										"value": "@pipeline().parameters.dsName",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "log pipeline metadata - FAILED_copy1",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Set FAIL status_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_util_log_pipeline_metadata",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"snapshotDate": {
+										"value": "@formatDateTime(pipeline().parameters.snapDate, 'yyyy-MM-dd')",
+										"type": "Expression"
+									},
+									"status": {
+										"value": "@variables('v_pl_Status')",
+										"type": "Expression"
+									},
+									"runID": {
+										"value": "@pipeline().parameters.runID",
+										"type": "Expression"
+									},
+									"sourceToTargetID": {
+										"value": "@item().SourceToTargetID",
+										"type": "Expression"
+									},
+									"pipelineTriggerTime": {
+										"value": "@convertFromUtc(pipeline().TriggerTime, 'India Standard Time')",
+										"type": "Expression"
+									},
+									"pipelineID": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"pipelineName": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"systemCode": {
+										"value": "@pipeline().parameters.sysCode",
+										"type": "Expression"
+									},
+									"dtastNm": {
+										"value": "@pipeline().parameters.dsName",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"sysCode": {
+				"type": "string",
+				"defaultValue": "OWS"
+			},
+			"dsName": {
+				"type": "string",
+				"defaultValue": "Sales"
+			},
+			"runID": {
+				"type": "string",
+				"defaultValue": "1"
+			},
+			"snapDate": {
+				"type": "string",
+				"defaultValue": "2023-07-11"
+			}
+		},
+		"variables": {
+			"v_pl_Status": {
+				"type": "String",
+				"defaultValue": "SUCCESS"
+			},
+			"v_pl_stage": {
+				"type": "String",
+				"defaultValue": "SOURCE_TO_RAW"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-02-20T14:17:48Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
