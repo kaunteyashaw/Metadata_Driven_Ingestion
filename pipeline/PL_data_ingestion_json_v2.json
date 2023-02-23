@@ -39,7 +39,7 @@
 				},
 				"inputs": [
 					{
-						"referenceName": "DS_online_files_json",
+						"referenceName": "DS_online_sales_json",
 						"type": "DatasetReference"
 					}
 				],
