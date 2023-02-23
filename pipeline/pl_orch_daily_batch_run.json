@@ -97,6 +97,49 @@
 						}
 					]
 				}
+			},
+			{
+				"name": "set batch status",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "For each batch run information",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[SetBatchStatus]",
+					"storedProcedureParameters": {
+						"PFrequency": {
+							"value": {
+								"value": "@variables('v_freq_')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PSystemCode": {
+							"value": {
+								"value": "@variables('v_sysCode')",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_AzSQL_data_Engg_metadata",
+					"type": "LinkedServiceReference"
+				}
 			}
 		],
 		"variables": {
