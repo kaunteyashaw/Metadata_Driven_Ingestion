@@ -1,0 +1,1577 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-dataingestion-metadatadriven-dev-demo-001"
+		},
+		"LS_AzSQL_data_Engg_metadata_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'LS_AzSQL_data_Engg_metadata'"
+		},
+		"LS_ablob_webstore_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'LS_ablob_webstore'"
+		},
+		"LS_adls_data_engg_datalake_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'LS_adls_data_engg_datalake'"
+		},
+		"LS_adls_data_engg_datalake_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://adlsdedatalake001.dfs.core.windows.net/"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_data_ingestion_json_v6')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get SrcToTgt details",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:10:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderStoredProcedureName": "[[dbo].[GetSourceToTargetInfo]",
+								"storedProcedureParameters": {
+									"Dataset": {
+										"type": "String",
+										"value": {
+											"value": "@pipeline().parameters.dsName",
+											"type": "Expression"
+										}
+									},
+									"SourceSystemCode": {
+										"type": "String",
+										"value": {
+											"value": "@pipeline().parameters.sysCode",
+											"type": "Expression"
+										}
+									},
+									"Stage": {
+										"type": "String",
+										"value": {
+											"value": "@variables('v_pl_stage')",
+											"type": "Expression"
+										}
+									}
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_AzSQL_SourceToTargetDetails",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "For each src to tgt",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Get SrcToTgt details",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get SrcToTgt details').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "Copy web store online sales data_copy1",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.00:10:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "JsonSource",
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "JsonReadSettings"
+											}
+										},
+										"sink": {
+											"type": "JsonSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "JsonWriteSettings"
+											}
+										},
+										"enableStaging": false
+									},
+									"inputs": [
+										{
+											"referenceName": "DS_online_files_json",
+											"type": "DatasetReference",
+											"parameters": {
+												"ds_param_container": {
+													"value": "@item().SourceContainer",
+													"type": "Expression"
+												},
+												"ds_param_directory": {
+													"value": "@item().SourceRelativePathSchema",
+													"type": "Expression"
+												},
+												"ds_param_fileName": {
+													"value": "@item().SourceTechnicalName",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "DS_DLake_Online_folders_json",
+											"type": "DatasetReference",
+											"parameters": {
+												"param_ds_dl_container": {
+													"value": "@item().TargetContainer",
+													"type": "Expression"
+												},
+												"param_ds_dl_filename": {
+													"value": "@item().TargetTechnicalName",
+													"type": "Expression"
+												},
+												"param_ds_dl_directory": {
+													"value": "@concat(item().TargetRelativePathSchema, '/', \r\n        formatDateTime(pipeline().parameters.snapDate, 'yyyy-MM-dd'))",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "set SUCCESS status_copy1",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "Copy web store online sales data_copy1",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "v_pl_Status",
+										"value": {
+											"value": "SUCCESS",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "Set FAIL status_copy1",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "Copy web store online sales data_copy1",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "v_pl_Status",
+										"value": {
+											"value": "FAILED",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "log pipeline metadata - SUCCESS_copy1",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "set SUCCESS status_copy1",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_util_log_pipeline_metadata",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"snapshotDate": {
+												"value": "@formatDateTime(pipeline().parameters.snapDate, 'yyyy-MM-dd')",
+												"type": "Expression"
+											},
+											"status": {
+												"value": "@variables('v_pl_Status')",
+												"type": "Expression"
+											},
+											"runID": {
+												"value": "@pipeline().parameters.runID",
+												"type": "Expression"
+											},
+											"sourceToTargetID": {
+												"value": "@item().SourceToTargetID",
+												"type": "Expression"
+											},
+											"pipelineTriggerTime": {
+												"value": "@convertFromUtc(pipeline().TriggerTime, 'India Standard Time')",
+												"type": "Expression"
+											},
+											"pipelineID": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											},
+											"pipelineName": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											},
+											"systemCode": {
+												"value": "@pipeline().parameters.sysCode",
+												"type": "Expression"
+											},
+											"dtastNm": {
+												"value": "@pipeline().parameters.dsName",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								{
+									"name": "log pipeline metadata - FAILED_copy1",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "Set FAIL status_copy1",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_util_log_pipeline_metadata",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"snapshotDate": {
+												"value": "@formatDateTime(pipeline().parameters.snapDate, 'yyyy-MM-dd')",
+												"type": "Expression"
+											},
+											"status": {
+												"value": "@variables('v_pl_Status')",
+												"type": "Expression"
+											},
+											"runID": {
+												"value": "@pipeline().parameters.runID",
+												"type": "Expression"
+											},
+											"sourceToTargetID": {
+												"value": "@item().SourceToTargetID",
+												"type": "Expression"
+											},
+											"pipelineTriggerTime": {
+												"value": "@convertFromUtc(pipeline().TriggerTime, 'India Standard Time')",
+												"type": "Expression"
+											},
+											"pipelineID": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											},
+											"pipelineName": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											},
+											"systemCode": {
+												"value": "@pipeline().parameters.sysCode",
+												"type": "Expression"
+											},
+											"dtastNm": {
+												"value": "@pipeline().parameters.dsName",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"sysCode": {
+						"type": "string",
+						"defaultValue": "OWS"
+					},
+					"dsName": {
+						"type": "string",
+						"defaultValue": "Sales"
+					},
+					"runID": {
+						"type": "string",
+						"defaultValue": "1"
+					},
+					"snapDate": {
+						"type": "string",
+						"defaultValue": "2023-07-11"
+					}
+				},
+				"variables": {
+					"v_pl_Status": {
+						"type": "String",
+						"defaultValue": "SUCCESS"
+					},
+					"v_pl_stage": {
+						"type": "String",
+						"defaultValue": "SOURCE_TO_RAW"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-02-20T14:17:48Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzSQL_SourceToTargetDetails')]",
+				"[concat(variables('factoryId'), '/datasets/DS_online_files_json')]",
+				"[concat(variables('factoryId'), '/datasets/DS_DLake_Online_folders_json')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_util_log_pipeline_metadata')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_util_send_email_notifications')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get Email addresses",
+						"description": "get email address for a specific sys code and dataset name",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:10:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderStoredProcedureName": "[[dbo].[GetEmailAddresses]",
+								"storedProcedureParameters": {
+									"DatasetName": {
+										"type": "String",
+										"value": {
+											"value": "@pipeline().parameters.DatasetName",
+											"type": "Expression"
+										}
+									},
+									"SystemCode": {
+										"type": "String",
+										"value": {
+											"value": "@pipeline().parameters.SystemCode",
+											"type": "Expression"
+										}
+									}
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_AzSQL_EmailRecipients",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ForEach email address",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Get Email addresses",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get Email addresses').output.value",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "Send Email",
+									"description": "sending email notification",
+									"type": "WebActivity",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.00:10:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"url": "https://app-adf-dataingestion-email-001.azurewebsites.net:443/api/app-name/triggers/manual/invoke?api-version=2022-05-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3dwb0cnn1RJUfn-qk6T_BKiDh8yAAlo4phDmtxlsucY",
+										"method": "POST",
+										"headers": {
+											"Content-Type": "application/json"
+										},
+										"body": {
+											"value": "@json(concat('{\n\"emailAddress\":\"',item().EmailAddress,'\",\n\n\"messageBody\":\"  \n        ',pipeline().parameters.message,'\",\n\n\"subject\": \"IGNORE_INFO:: ',pipeline().parameters.subject,'.\"\n\n}'))",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"DatasetName": {
+						"type": "string",
+						"defaultValue": "Sales"
+					},
+					"SystemCode": {
+						"type": "string",
+						"defaultValue": "OWS"
+					},
+					"subject": {
+						"type": "string"
+					},
+					"message": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "utilities"
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-02-20T11:23:46Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzSQL_EmailRecipients')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_orch_daily_batch_run')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Daily batch run orchestration of ingestion pipeline",
+				"activities": [
+					{
+						"name": "get BatchRun details",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:10:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderStoredProcedureName": "[[dbo].[GetBatch]",
+								"storedProcedureParameters": {
+									"PFrequency": {
+										"type": "String",
+										"value": {
+											"value": "@variables('v_freq_')",
+											"type": "Expression"
+										}
+									},
+									"PSystemCode": {
+										"type": "String",
+										"value": {
+											"value": "@variables('v_sysCode')",
+											"type": "Expression"
+										}
+									}
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_AzSQL_Batch_details",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "For each batch run information",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "get BatchRun details",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('get BatchRun details').output.value",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "Run ingestion",
+									"description": "PL_data_ingestion_json_v6",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "PL_data_ingestion_json_v6",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"sysCode": {
+												"value": "@variables('v_sysCode')",
+												"type": "Expression"
+											},
+											"dsName": {
+												"value": "@item().DatasetName",
+												"type": "Expression"
+											},
+											"runID": {
+												"value": "@item().runID",
+												"type": "Expression"
+											},
+											"snapDate": {
+												"value": "@item().SnapShotDate",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "set batch status",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "For each batch run information",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dbo].[SetBatchStatus]",
+							"storedProcedureParameters": {
+								"PFrequency": {
+									"value": {
+										"value": "@variables('v_freq_')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"PSystemCode": {
+									"value": {
+										"value": "@variables('v_sysCode')",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_AzSQL_data_Engg_metadata",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"variables": {
+					"v_freq_": {
+						"type": "String",
+						"defaultValue": "DAILY"
+					},
+					"v_sysCode": {
+						"type": "String",
+						"defaultValue": "OWS"
+					}
+				},
+				"folder": {
+					"name": "orchestration"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzSQL_Batch_details')]",
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzSQL_data_Engg_metadata')]",
+				"[concat(variables('factoryId'), '/pipelines/PL_data_ingestion_json_v6')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_util_log_pipeline_metadata')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Log pipeline run information(Metadata)",
+				"activities": [
+					{
+						"name": "IF CONDITION to set and send email",
+						"description": "Saves log & Sends mail when fail else save logs only.",
+						"type": "IfCondition",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(pipeline().parameters.status, 'SUCCESS')",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Log pipelinerun information meatdata",
+									"description": "for FALSE",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.10:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[dbo].[InsertPipelineLog]",
+										"storedProcedureParameters": {
+											"EndTime": {
+												"value": {
+													"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											},
+											"PipelineID": {
+												"value": {
+													"value": "@pipeline().parameters.pipelineID",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"PipelineName": {
+												"value": {
+													"value": "@pipeline().parameters.pipelineName",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"RunID": {
+												"value": {
+													"value": "@pipeline().parameters.runID",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"SnapshotDate": {
+												"value": {
+													"value": "@pipeline().parameters.snapshotDate",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											},
+											"SourceToTargetID": {
+												"value": {
+													"value": "@pipeline().parameters.sourceToTargetID",
+													"type": "Expression"
+												},
+												"type": "Int32"
+											},
+											"StartTime": {
+												"value": {
+													"value": "@pipeline().parameters.pipelineTriggerTime",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											},
+											"Status": {
+												"value": {
+													"value": "@pipeline().parameters.status",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"UpdateAt": {
+												"value": {
+													"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "LS_AzSQL_data_Engg_metadata",
+										"type": "LinkedServiceReference"
+									}
+								},
+								{
+									"name": "Set status and send email fro FALSE_FAIL",
+									"description": "calls 'pl_util_set_status_msg'",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "Log pipelinerun information meatdata",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_util_set_status_msg",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"status": {
+												"value": "@pipeline().parameters.status",
+												"type": "Expression"
+											},
+											"triggered_PL": {
+												"value": "@pipeline().parameters.pipelineName",
+												"type": "Expression"
+											},
+											"systemcode": {
+												"value": "@pipeline().parameters.systemCode",
+												"type": "Expression"
+											},
+											"datasetname": {
+												"value": "@pipeline().parameters.dtastNm",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "Log pipelinerun information meatdata_SUCCESS",
+									"description": "for SUCCESS",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.10:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[dbo].[InsertPipelineLog]",
+										"storedProcedureParameters": {
+											"EndTime": {
+												"value": {
+													"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											},
+											"PipelineID": {
+												"value": {
+													"value": "@pipeline().parameters.pipelineID",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"PipelineName": {
+												"value": {
+													"value": "@pipeline().parameters.pipelineName",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"RunID": {
+												"value": {
+													"value": "@pipeline().parameters.runID",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"SnapshotDate": {
+												"value": {
+													"value": "@pipeline().parameters.snapshotDate",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											},
+											"SourceToTargetID": {
+												"value": {
+													"value": "@pipeline().parameters.sourceToTargetID",
+													"type": "Expression"
+												},
+												"type": "Int32"
+											},
+											"StartTime": {
+												"value": {
+													"value": "@pipeline().parameters.pipelineTriggerTime",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											},
+											"Status": {
+												"value": {
+													"value": "@pipeline().parameters.status",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"UpdateAt": {
+												"value": {
+													"value": "@convertFromUtc(utcNow(), 'India Standard Time')",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "LS_AzSQL_data_Engg_metadata",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"snapshotDate": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"runID": {
+						"type": "string"
+					},
+					"sourceToTargetID": {
+						"type": "string"
+					},
+					"pipelineTriggerTime": {
+						"type": "string"
+					},
+					"pipelineID": {
+						"type": "string"
+					},
+					"pipelineName": {
+						"type": "string"
+					},
+					"systemCode": {
+						"type": "string"
+					},
+					"dtastNm": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "utilities"
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-02-20T15:23:53Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzSQL_data_Engg_metadata')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_util_set_status_msg')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_util_set_status_msg')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Switch Status",
+						"description": "construct a message and subject depending on the supplied status of either success or fail.",
+						"type": "Switch",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"on": {
+								"value": "@pipeline().parameters.status",
+								"type": "Expression"
+							},
+							"cases": [
+								{
+									"value": "SUCCESS",
+									"activities": [
+										{
+											"name": "send_email_notifications -for SUCCESS",
+											"description": "calls 'PL_util_send_email_notifications'",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "PL_util_send_email_notifications",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"DatasetName": {
+														"value": "@pipeline().parameters.datasetname",
+														"type": "Expression"
+													},
+													"SystemCode": {
+														"value": "@pipeline().parameters.systemcode",
+														"type": "Expression"
+													},
+													"subject": {
+														"value": "@concat('ADF Pipeline: ', pipeline().parameters.triggered_PL, \n        '. STATUS:: ',pipeline().parameters.status)",
+														"type": "Expression"
+													},
+													"message": {
+														"value": "@concat(pipeline().parameters.triggered_PL, ' has status: ',pipeline().parameters.status,'!')",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								},
+								{
+									"value": "FAILED",
+									"activities": [
+										{
+											"name": "send_email_notifications -for FAILURE",
+											"description": "calls 'PL_util_send_email_notifications'",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "PL_util_send_email_notifications",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"DatasetName": {
+														"value": "@pipeline().parameters.datasetname",
+														"type": "Expression"
+													},
+													"SystemCode": {
+														"value": "@pipeline().parameters.systemcode",
+														"type": "Expression"
+													},
+													"subject": {
+														"value": "@concat('ADF Pipeline: ', pipeline().parameters.triggered_PL, \n        '. STATUS:: ',pipeline().parameters.status)",
+														"type": "Expression"
+													},
+													"message": {
+														"value": "@concat(pipeline().parameters.triggered_PL, ' has status: ',pipeline().parameters.status,'!')",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								}
+							],
+							"defaultActivities": [
+								{
+									"name": "send_email_notifications - for Default",
+									"description": "calls 'PL_util_send_email_notifications'",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "PL_util_send_email_notifications",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"DatasetName": {
+												"value": "@pipeline().parameters.datasetname",
+												"type": "Expression"
+											},
+											"SystemCode": {
+												"value": "@pipeline().parameters.systemcode",
+												"type": "Expression"
+											},
+											"subject": {
+												"value": "@concat('ADF Pipeline: ', pipeline().parameters.triggered_PL,\n        ' has NO VALID Status!')",
+												"type": "Expression"
+											},
+											"message": {
+												"value": "@concat(pipeline().parameters.triggered_PL, ' has no valid status. Please reach out to DE Team for more information.')",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"status": {
+						"type": "string"
+					},
+					"triggered_PL": {
+						"type": "string"
+					},
+					"systemcode": {
+						"type": "string"
+					},
+					"datasetname": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "utilities"
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-02-20T11:23:47Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/PL_util_send_email_notifications')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_AzSQL_Batch_details')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AzSQL_data_Engg_metadata",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Metadata"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "SourceToTargetID",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "SourceSystemCode",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceSystem",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceDatasetName",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceDataObjectName",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceContainer",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceRelativePathSchema",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceTechnicalName",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetSystemCode",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetSystem",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetDatasetName",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetDataObjectName",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetContainer",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetRelativePathSchema",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetTechnicalName",
+						"type": "varchar"
+					},
+					{
+						"name": "Stage",
+						"type": "varchar"
+					},
+					{
+						"name": "Status",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "BatchRun"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzSQL_data_Engg_metadata')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_AzSQL_EmailRecipients')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AzSQL_data_Engg_metadata",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Metadata"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "SystemCode",
+						"type": "varchar"
+					},
+					{
+						"name": "DatasetName",
+						"type": "varchar"
+					},
+					{
+						"name": "SystemInfoID",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "FirstName",
+						"type": "varchar"
+					},
+					{
+						"name": "LastName",
+						"type": "varchar"
+					},
+					{
+						"name": "EmailAddress",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "EmailRecipients"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzSQL_data_Engg_metadata')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_AzSQL_SourceToTargetDetails')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AzSQL_data_Engg_metadata",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Metadata"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "SourceToTargetID",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "SourceSystemCode",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceSystem",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceDatasetName",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceDataObjectName",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceContainer",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceRelativePathSchema",
+						"type": "varchar"
+					},
+					{
+						"name": "SourceTechnicalName",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetSystemCode",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetSystem",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetDatasetName",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetDataObjectName",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetContainer",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetRelativePathSchema",
+						"type": "varchar"
+					},
+					{
+						"name": "TargetTechnicalName",
+						"type": "varchar"
+					},
+					{
+						"name": "Stage",
+						"type": "varchar"
+					},
+					{
+						"name": "Status",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "SourceToTargetView"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzSQL_data_Engg_metadata')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_DLake_Online_folders_json')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_adls_data_engg_datalake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"param_ds_dl_container": {
+						"type": "string"
+					},
+					"param_ds_dl_filename": {
+						"type": "string"
+					},
+					"param_ds_dl_directory": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().param_ds_dl_filename",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().param_ds_dl_directory",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().param_ds_dl_container",
+							"type": "Expression"
+						}
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_adls_data_engg_datalake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_DLake_Online_sales_json')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_adls_data_engg_datalake",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": "webstore/raw/onlinesales",
+						"fileSystem": "webdevelopment"
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_adls_data_engg_datalake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_online_files_json')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "JSON Source datasets",
+				"linkedServiceName": {
+					"referenceName": "LS_ablob_webstore",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"ds_param_container": {
+						"type": "string",
+						"defaultValue": "sales"
+					},
+					"ds_param_directory": {
+						"type": "string",
+						"defaultValue": "."
+					},
+					"ds_param_fileName": {
+						"type": "string",
+						"defaultValue": "onlinesales.json"
+					}
+				},
+				"folder": {
+					"name": "webstore"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().ds_param_fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().ds_param_directory",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@dataset().ds_param_container",
+							"type": "Expression"
+						}
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_ablob_webstore')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_online_sales_json')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "JSON Source datasets",
+				"linkedServiceName": {
+					"referenceName": "LS_ablob_webstore",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"ds_param_container": {
+						"type": "string",
+						"defaultValue": "sales"
+					},
+					"ds_param_directory": {
+						"type": "string",
+						"defaultValue": "."
+					},
+					"ds_param_fileName": {
+						"type": "string",
+						"defaultValue": "onlinesales.json"
+					}
+				},
+				"folder": {
+					"name": "webstore"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().ds_param_fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().ds_param_directory",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@dataset().ds_param_container",
+							"type": "Expression"
+						}
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_ablob_webstore')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_AzSQL_data_Engg_metadata')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Connection to metadata database",
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": "[parameters('LS_AzSQL_data_Engg_metadata_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_ablob_webstore')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": "[parameters('LS_ablob_webstore_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_adls_data_engg_datalake')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('LS_adls_data_engg_datalake_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('LS_adls_data_engg_datalake_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
